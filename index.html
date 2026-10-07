@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#E8EDF1">
+<script>
+  // Applique le thème choisi (ou celui du téléphone) avant le premier affichage, pour éviter un éclair blanc.
+  (function () {
+    var pref = 'auto';
+    try { pref = localStorage.getItem('apparence') || 'auto'; } catch (e) {}
+    var sombre = pref === 'sombre' || (pref === 'auto' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.setAttribute('data-theme', sombre ? 'sombre' : 'clair');
+  })();
+</script>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="FabiDex">
+<title>FabiDex</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #E8EDF1;
+    --surface: #F7F9FB;
+    --ink: #142033;
+    --muted: #55657A;
+    --line: #C9D3DD;
+    --gold: #E3A400;
+    --gold-soft: #FFF3CF;
+    --teal: #1B6F7E;
+    --danger: #B3261E;
+    --field: #fff;               /* fond des champs de saisie */
+    --on-ink: #fff;              /* texte sur les boutons foncés */
+    --voile: rgba(20, 32, 51, .45);
+    --cols: 32;  /* colonnes de la planche de sprites (réglées par le script dans la page) */
+    --rows: 33;
+    --display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+    --body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 400 16px/1.5 var(--body);
+    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  }
+  [hidden] { display: none !important; }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 3px solid var(--teal); outline-offset: 2px; }
+
+  /* ---------- Connexion ---------- */
+  .auth {
+    min-height: 100vh;
+    display: grid;
+    place-items: center;
+    padding: 24px 16px;
+  }
+  .auth-card {
+    width: 100%;
+    max-width: 400px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    padding: 28px 24px;
+  }
+  .auth-card h1 {
+    font: 800 2.2rem/1.05 var(--display);
+    margin: 0 0 6px;
+    letter-spacing: -0.02em;
+  }
+  .auth-card p.lead { margin: 0 0 22px; color: var(--muted); }
+  .field { display: block; margin-bottom: 14px; }
+  .field span { display: block; font-weight: 600; font-size: .9rem; margin-bottom: 4px; }
+  :root[data-theme="sombre"] {
+    color-scheme: dark;
+    --bg: #0E1520;
+    --surface: #172131;
+    --ink: #E8EEF6;
+    --muted: #9DABBD;
+    --line: #2A3A50;
+    --gold: #F0B429;
+    --gold-soft: #2D2813;
+    --teal: #5FC9D8;
+    --danger: #FF8A80;
+    --field: #0E1520;
+    --on-ink: #0E1520;
+    --voile: rgba(0, 0, 0, .65);
+  }
+  .field input {
+    width: 100%;
+    padding: 11px 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--field);
+    font-size: 16px; /* évite le zoom automatique sur iPhone */
+  }
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 11px 18px;
+    border-radius: 10px;
+    border: 1px solid var(--ink);
+    background: var(--ink);
+    color: var(--on-ink);
+    font-weight: 600;
+  }
+  .btn.block { width: 100%; }
+  .btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+  .btn.gold { background: var(--gold); border-color: var(--gold); color: #1d1500; }
+  .btn:disabled { opacity: .6; cursor: default; }
+  .link {
+    background: none; border: 0; padding: 4px 0;
+    color: var(--teal); text-decoration: underline; text-underline-offset: 3px;
+  }
+  .auth-links { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 16px; }
+  .msg { min-height: 1.4em; margin: 10px 0 0; font-size: .92rem; }
+  .msg.err { color: var(--danger); }
+  .msg.ok { color: var(--teal); }
+
+  /* ---------- En-tête ---------- */
+  header.top {
+    position: sticky; top: 0; z-index: 5;
+    background: color-mix(in srgb, var(--bg) 92%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--line);
+    padding: 12px 16px 10px;
+  }
+  .top-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; max-width: 1200px; margin: 0 auto; }
+  .brand { font: 800 1.35rem/1 var(--display); letter-spacing: -0.02em; margin: 0; }
+  .count { display: flex; align-items: baseline; gap: 6px; margin-left: auto; }
+  .count strong { font: 800 1.6rem/1 var(--display); }
+  .count span { color: var(--muted); font-size: .95rem; }
+  .bar { max-width: 1200px; margin: 8px auto 0; height: 6px; background: var(--line); border-radius: 99px; overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #f3c34a, #ff9ec7, #7fd6e6); transition: width .3s ease; }
+
+  /* ---------- Profil ---------- */
+  .avatar {
+    --t: 40px;
+    flex: none; width: var(--t); height: var(--t); border-radius: 50%;
+    object-fit: cover; display: grid; place-items: center;
+    background: var(--gold-soft); border: 2px solid var(--line); color: var(--ink);
+    font: 800 calc(var(--t) * .45)/1 var(--display);
+  }
+  .profil-btn {
+    display: flex; align-items: center; gap: 8px;
+    background: none; border: 0; padding: 2px; border-radius: 99px; font-weight: 600;
+  }
+  .profil-nom { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  @media (max-width: 520px) { .profil-nom { display: none; } }
+  .profil-titre { font: 800 1.5rem/1.1 var(--display); letter-spacing: -0.01em; margin: 0; }
+  .profil-photo { display: flex; align-items: center; gap: 16px; margin: 16px 0; }
+  .profil-photo-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+  .profil-email { margin: 0 0 4px; color: var(--muted); font-size: .9rem; overflow-wrap: anywhere; }
+  .fiche .link { margin-top: 14px; }
+  .apparence { border: 0; margin: 14px 0 6px; padding: 0; }
+  .apparence legend { padding: 0; margin-bottom: 4px; font-weight: 600; font-size: .9rem; }
+  .apparence .choix { display: flex; gap: 6px; }
+  .apparence label {
+    position: relative; flex: 1; text-align: center; padding: 8px 6px;
+    border: 1px solid var(--line); border-radius: 10px; font-weight: 600; cursor: pointer;
+  }
+  .apparence label.sel { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
+  .apparence input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
+  .apparence label:focus-within { outline: 3px solid var(--teal); outline-offset: 2px; }
+
+  /* ---------- Onglets ---------- */
+  .onglets { max-width: 1200px; margin: 10px auto 0; display: flex; gap: 6px; }
+  .onglet {
+    padding: 7px 16px; border: 1px solid var(--line); border-radius: 99px;
+    background: transparent; font-weight: 600;
+  }
+  .onglet[aria-current="page"] { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
+
+  /* ---------- Filtres ---------- */
+  .filters {
+    max-width: 1200px; margin: 0 auto; padding: 14px 16px 6px;
+    display: grid; gap: 10px;
+    grid-template-columns: 1fr 1fr;
+  }
+  .filters .search, .filters .large { grid-column: 1 / -1; }
+  .filters input, .filters select, .c-filtres input, .c-filtres select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--field);
+    font-size: 16px;
+  }
+  @media (min-width: 760px) {
+    .filters { grid-template-columns: 2fr 1fr 1fr 1.4fr 1.5fr; }
+    .filters .search, .filters .large { grid-column: auto; }
+  }
+  .summary { max-width: 1200px; margin: 0 auto; padding: 4px 16px 10px; color: var(--muted); font-size: .92rem; }
+
+  /* ---------- Grille ---------- */
+  .grid {
+    list-style: none; margin: 0 auto; padding: 0 16px 48px;
+    max-width: 1200px;
+    display: grid; gap: 10px;
+    grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
+  }
+  .card {
+    position: relative;
+    background: var(--surface);
+    border: 2px solid var(--line);
+    border-radius: 14px;
+  }
+  .card.on {
+    border-color: transparent;
+    background:
+      linear-gradient(var(--gold-soft), var(--surface)) padding-box,
+      conic-gradient(from 210deg, #f3c34a, #ff9ec7, #7fd6e6, #b9a6ff, #f3c34a) border-box;
+  }
+  .open {
+    display: flex; flex-direction: column; align-items: center;
+    width: 100%; padding: 10px 6px 10px;
+    background: none; border: 0; border-radius: 12px;
+    text-align: center;
+  }
+  /* Les sprites viennent de deux planches d'images (sprites/classique.webp et sprites/shiny.webp),
+     générées par outils/generer_sprites.py : un Pokémon par case de 96 px, dans l'ordre du Pokédex. */
+  .sprite {
+    display: block; flex: none; width: 96px; height: 96px;
+    background-repeat: no-repeat;
+    background-size: calc(var(--cols) * 96px) calc(var(--rows) * 96px);
+    background-position: calc(var(--x) * -96px) calc(var(--y) * -96px);
+    image-rendering: pixelated;
+  }
+  .sprite.shiny { background-image: var(--planche-shiny); }
+  .sprite.classique { background-image: var(--planche-classique); }
+  .grille-m2 .card:not(.on) .open .sprite { filter: grayscale(1) opacity(.5); }
+  .num { font-size: .8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .nom { font-weight: 600; font-size: .92rem; line-height: 1.2; overflow-wrap: anywhere; }
+  .check {
+    position: absolute; top: 4px; right: 4px;
+    width: 38px; height: 38px;
+    display: grid; place-items: center;
+    background: transparent; border: 0; border-radius: 50%;
+    color: #8FA0B3;
+  }
+  .check svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; }
+  .check[aria-pressed="true"] { color: var(--gold); }
+  .check[aria-pressed="true"] svg { fill: currentColor; }
+  .empty { grid-column: 1 / -1; text-align: center; color: var(--muted); padding: 40px 0; }
+
+  /* ---------- Statistiques ---------- */
+  .stats { max-width: 1200px; margin: 0 auto; padding: 20px 16px 56px; }
+  .stats-entete { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
+  .stats-titre { font: 800 1.6rem/1.1 var(--display); letter-spacing: -0.01em; margin: 0; }
+  .stats-pseudo { margin: 2px 0 0; color: var(--muted); }
+  .stats-sous { font: 600 1.1rem/1.3 var(--display); margin: 30px 0 12px; }
+  .stat-carte {
+    position: relative;
+    display: flex; align-items: center; gap: 16px;
+    padding: 16px; background: var(--surface);
+    border: 2px solid var(--line); border-radius: 16px;
+  }
+  .stat-carte.total {
+    max-width: 440px; gap: 22px; padding: 20px;
+    border-color: transparent;
+    background:
+      linear-gradient(var(--gold-soft), var(--surface)) padding-box,
+      conic-gradient(from 210deg, #f3c34a, #ff9ec7, #7fd6e6, #b9a6ff, #f3c34a) border-box;
+  }
+  .stat-gens { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); }
+  .jauge {
+    flex: none; width: 22px; height: 112px;
+    display: flex; align-items: flex-end;
+    background: var(--line); border-radius: 99px; overflow: hidden;
+  }
+  .jauge.grande { width: 36px; height: 172px; }
+  .jauge i {
+    display: block; width: 100%; height: 0;
+    border-radius: 99px;
+    transition: height .8s cubic-bezier(.2, .8, .2, 1);
+  }
+  .stat-nom { margin: 0 0 2px; font-weight: 600; }
+  .stat-gros { margin: 0; color: var(--muted); }
+  .stat-gros strong { font: 800 1.9rem/1 var(--display); color: var(--ink); }
+  .stat-pct { margin: 4px 0 0; font: 600 1.05rem/1.2 var(--display); }
+  .stat-carte.total .stat-gros strong { font-size: 3rem; }
+  .stat-carte.total .stat-pct { font-size: 1.4rem; }
+  .etoile { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; color: var(--gold); }
+  .stat-carte.total .etoile { top: 10px; right: 10px; width: 36px; height: 36px; }
+  .etoile svg { display: block; width: 100%; height: 100%; fill: currentColor; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; }
+
+  /* ---------- Classement et profils ---------- */
+  .classement, .joueur { max-width: 1200px; margin: 0 auto; padding: 20px 16px 56px; }
+  .page-titre { font: 800 1.6rem/1.1 var(--display); letter-spacing: -0.01em; margin: 0 0 14px; }
+  .c-filtres { display: grid; gap: 10px; max-width: 760px; grid-template-columns: 1fr 1fr; }
+  .c-filtres.deux { grid-template-columns: 1fr; }
+  .c-filtres .search { grid-column: 1 / -1; }
+  @media (min-width: 640px) {
+    .c-filtres.deux { grid-template-columns: 2fr 1fr; }
+    .c-filtres.trois { grid-template-columns: 2fr 1fr 1fr; }
+    .c-filtres .search { grid-column: auto; }
+  }
+  .c-resume { margin: 10px 0 0; color: var(--muted); font-size: .92rem; }
+  .rang-info { max-width: 760px; margin: 12px 0 0; padding: 10px 14px; border: 1px dashed var(--line); border-radius: 12px; }
+  .rang-liste { list-style: none; margin: 12px 0 0; padding: 0; display: grid; gap: 8px; max-width: 760px; }
+  .rang-liste .vide, .joueur .vide { color: var(--muted); padding: 24px 0; }
+  .rang-ligne {
+    display: flex; align-items: center; gap: 12px; width: 100%;
+    padding: 10px 14px; text-align: left;
+    background: var(--surface); border: 2px solid var(--line); border-radius: 14px;
+  }
+  .rang-ligne.moi { border-color: var(--gold); background: var(--gold-soft); }
+  .rang {
+    flex: none; width: 34px; height: 34px; border-radius: 50%;
+    display: grid; place-items: center;
+    background: var(--bg); border: 1px solid var(--line);
+    font: 800 1rem/1 var(--display); font-variant-numeric: tabular-nums;
+  }
+  .rang.r1 { background: #F3C34A; border-color: #F3C34A; color: #142033; }
+  .rang.r2 { background: #C3CDD8; border-color: #C3CDD8; color: #142033; }
+  .rang.r3 { background: #E3AE78; border-color: #E3AE78; color: #142033; }
+  .rang-nom { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .moi-badge { margin-left: 8px; padding: 1px 8px; font-size: .75rem; font-weight: 600; color: var(--teal); border: 1px solid var(--teal); border-radius: 99px; }
+  .rang-score { flex: none; text-align: right; color: var(--muted); }
+  .rang-score strong { font: 800 1.35rem/1 var(--display); color: var(--ink); }
+  .joueur-entete { display: flex; align-items: center; gap: 16px; margin: 16px 0 18px; }
+  .joueur-entete .page-titre { margin: 0; }
+  .joueur .grid { padding-left: 0; padding-right: 0; }
+
+  /* ---------- Fiche ---------- */
+  dialog {
+    width: min(480px, calc(100% - 24px));
+    max-height: calc(100% - 48px);
+    padding: 0; border: 1px solid var(--line); border-radius: 18px;
+    background: var(--surface); color: var(--ink);
+  }
+  dialog::backdrop { background: var(--voile); }
+  .fiche { padding: 20px 20px 22px; }
+  .fiche-head { display: flex; align-items: center; gap: 14px; }
+  .fiche-head h2 { font: 800 1.6rem/1.1 var(--display); margin: 0; letter-spacing: -0.01em; }
+  .fiche-head p { margin: 2px 0 0; color: var(--muted); }
+  .fiche h3 { font: 600 1rem/1.3 var(--display); margin: 20px 0 8px; }
+  .jeux { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .jeux li { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; background: var(--field); }
+  .jeux small { display: block; color: var(--muted); margin-top: 2px; }
+  .fiche-actions { display: flex; gap: 10px; margin-top: 20px; }
+  .fiche-actions .btn { flex: 1; }
+
+  /* ---------- Toast ---------- */
+  .toast {
+    position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+    background: var(--ink); color: var(--on-ink); padding: 10px 16px; border-radius: 10px; z-index: 20;
+    max-width: calc(100% - 32px);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .bar i, .jauge i { transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Connexion / inscription -->
+<main class="auth" id="vue-auth" hidden>
+  <div class="auth-card">
+    <h1>FabiDex</h1>
+    <p class="lead">Suis les Pokémon shiny que tu as obtenus et ceux qu'il te reste à chasser.</p>
+    <form id="form-auth" novalidate>
+      <label class="field"><span>E-mail</span>
+        <input id="email" type="email" autocomplete="email" inputmode="email" required>
+      </label>
+      <label class="field"><span>Mot de passe</span>
+        <input id="mdp" type="password" autocomplete="current-password" minlength="6" required>
+      </label>
+      <button class="btn block" id="btn-auth" type="submit">Se connecter</button>
+      <p class="msg" id="msg-auth" role="status" aria-live="polite"></p>
+    </form>
+    <div class="auth-links">
+      <button class="link" id="bascule" type="button">Pas encore de compte ? Créer un compte</button>
+      <button class="link" id="oubli" type="button">Mot de passe oublié</button>
+    </div>
+  </div>
+</main>
+
+<!-- Nouveau mot de passe (lien reçu par e-mail) -->
+<main class="auth" id="vue-recup" hidden>
+  <div class="auth-card">
+    <h1>Nouveau mot de passe</h1>
+    <p class="lead">Choisis un nouveau mot de passe pour ton compte.</p>
+    <form id="form-recup" novalidate>
+      <label class="field"><span>Nouveau mot de passe</span>
+        <input id="mdp-new" type="password" autocomplete="new-password" minlength="6" required>
+      </label>
+      <button class="btn block" type="submit">Enregistrer le mot de passe</button>
+      <p class="msg" id="msg-recup" role="status" aria-live="polite"></p>
+    </form>
+  </div>
+</main>
+
+<!-- Application -->
+<div id="vue-app" hidden>
+  <header class="top">
+    <div class="top-row">
+      <h1 class="brand">FabiDex</h1>
+      <div class="count" aria-live="polite"><strong id="total-obtenus">0</strong><span>/ <span id="total-max">0</span> obtenus</span></div>
+      <button class="profil-btn" id="btn-profil" type="button" aria-label="Mon profil"></button>
+    </div>
+    <div class="bar" aria-hidden="true"><i id="progres"></i></div>
+    <nav class="onglets" aria-label="Pages">
+      <button class="onglet" type="button" data-page="collection" aria-current="page">Collection</button>
+      <button class="onglet" type="button" data-page="stats" aria-current="false">Stats</button>
+      <button class="onglet" type="button" data-page="classement" aria-current="false">Classement</button>
+    </nav>
+  </header>
+
+  <div id="page-collection">
+
+  <section class="filters" aria-label="Filtres">
+    <input class="search" id="f-q" type="search" placeholder="Rechercher un nom ou un numéro" aria-label="Rechercher un nom ou un numéro">
+    <select id="f-gen" aria-label="Génération"></select>
+    <select id="f-etat" aria-label="État">
+      <option value="">Tous</option>
+      <option value="obtenus">Obtenus</option>
+      <option value="manquants">Manquants</option>
+    </select>
+    <select class="large" id="f-jeu" aria-label="Jeu"></select>
+    <select class="large" id="f-mode" aria-label="Mode d'affichage des sprites">
+      <option value="1">Mode 1</option>
+      <option value="2">Mode 2</option>
+      <option value="3">Mode 3</option>
+    </select>
+  </section>
+  <p class="summary" id="resume"></p>
+  <ul class="grid" id="grille"></ul>
+  </div>
+
+  <section class="stats" id="page-stats" aria-labelledby="stats-titre" hidden>
+    <div class="stats-entete">
+      <span id="stats-avatar"></span>
+      <div>
+        <h2 class="stats-titre" id="stats-titre">Statistiques</h2>
+        <p class="stats-pseudo" id="stats-pseudo" hidden></p>
+      </div>
+    </div>
+    <div id="stat-total"></div>
+    <h3 class="stats-sous">Par génération</h3>
+    <div class="stat-gens" id="stat-gens"></div>
+  </section>
+
+  <section class="classement" id="page-classement" aria-labelledby="classement-titre" hidden>
+    <h2 class="page-titre" id="classement-titre">Classement</h2>
+    <div class="c-filtres deux">
+      <input class="search" id="c-q" type="search" placeholder="Rechercher un pseudo" aria-label="Rechercher un pseudo">
+      <select id="c-gen" aria-label="Génération"></select>
+    </div>
+    <p class="rang-info" id="c-info" hidden>Tu n'apparais pas dans le classement : <button class="link" type="button" data-profil>choisis un pseudo</button> pour y figurer.</p>
+    <p class="c-resume" id="c-resume" aria-live="polite"></p>
+    <ol class="rang-liste" id="c-liste"></ol>
+  </section>
+
+  <section class="joueur" id="page-joueur" aria-label="Profil d'un joueur" hidden>
+    <button class="btn ghost" id="j-retour" type="button">Retour au classement</button>
+    <div class="joueur-entete" id="j-entete"></div>
+    <div id="j-stat-total"></div>
+    <h3 class="stats-sous">Par génération</h3>
+    <div class="stat-gens" id="j-stat-gens"></div>
+    <h3 class="stats-sous">Shinydex</h3>
+    <div class="c-filtres trois">
+      <input class="search" id="j-q" type="search" placeholder="Rechercher un nom ou un numéro" aria-label="Rechercher un nom ou un numéro">
+      <select id="j-gen" aria-label="Génération"></select>
+      <select id="j-etat" aria-label="État">
+        <option value="">Tous</option>
+        <option value="obtenus">Obtenus</option>
+        <option value="manquants">Manquants</option>
+      </select>
+    </div>
+    <p class="c-resume" id="j-resume"></p>
+    <ul class="grid" id="j-grille"></ul>
+  </section>
+</div>
+
+<dialog id="fiche" aria-labelledby="fiche-titre"></dialog>
+<dialog id="profil" aria-labelledby="profil-titre"></dialog>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+(() => {
+  // ====== À REMPLIR : Supabase > Project Settings > API ======
+  const SUPABASE_URL = 'https://qfmziradukyvbcpexxec.supabase.co';
+  const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFmbXppcmFkdWt5dmJjcGV4eGVjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEzNzQ0MzYsImV4cCI6MjEwNjk1MDQzNn0.Lz3csax3WO5AI7bnR5aAPt7EEAZvWo415xDv4DOIfdE';
+  // ===========================================================
+
+  // Ces deux valeurs sont déduites de shiny.json au chargement : rien n'est écrit en dur.
+  let TOTAL = 0;          // plus grand numéro de Pokémon du fichier
+  let generations = [];   // numéros de génération présents dans le fichier (1, 2, 3...)
+  const COLONNES_PLANCHE = 32; // doit être identique à COLONNES dans outils/generer_sprites.py
+  const $ = (s) => document.querySelector(s);
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const norm = (s) => String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  const pad = (n) => String(n).padStart(3, '0');
+  function lireMode() {
+    try { const m = localStorage.getItem('modeAffichage'); return ['1', '2', '3'].includes(m) ? m : '2'; }
+    catch (e) { return '2'; }
+  }
+  let mode = lireMode();
+  // Mode 1 : classique, shiny si obtenu. Mode 2 : toujours shiny (grisé si pas obtenu). Mode 3 : toujours classique.
+  function varianteCarte(on) {
+    if (mode === '2') return 'shiny';
+    if (mode === '3') return 'classique';
+    return on ? 'shiny' : 'classique';
+  }
+  // Affiche le sprite du Pokémon n° n (variante : 'shiny' ou 'classique') depuis les planches d'images.
+  function spriteHTML(n, variante, label) {
+    const i = n - 1;
+    const aria = label ? `role="img" aria-label="${esc(label)}"` : 'aria-hidden="true"';
+    return `<span class="sprite ${variante}" style="--x:${i % COLONNES_PLANCHE};--y:${Math.floor(i / COLONNES_PLANCHE)}" ${aria}></span>`;
+  }
+  const STAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.6l-5.8 3.1 1.1-6.5L2.6 9.6l6.5-.9z"/></svg>';
+
+  const configOk = !SUPABASE_URL.includes('VOTRE-PROJET');
+  const sb = configOk ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+
+  let jeux = [];
+  let jeuParId = {};
+  let pokemons = [];
+  let obtenus = new Array(TOTAL).fill(0);
+  let modeInscription = false;
+  let recuperation = false;
+  let courant = null; // numéro du Pokémon affiché dans la fiche
+  let utilisateur = null;
+  let profil = { pseudo: '', avatar_path: null };
+  let photoEnAttente = null; // { blob, url } pour une nouvelle photo, { retirer: true } pour la supprimer
+  const f = { q: '', gen: '', jeu: '', etat: '' };
+
+  // ---------- Données ----------
+  const pret = fetch('shiny.json')
+    .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then((d) => {
+      jeux = d.jeux || [];
+      jeuParId = Object.fromEntries(jeux.map((j) => [j.id, j]));
+      pokemons = Object.entries(d.pokemon || {})
+        .map(([n, p]) => ({ n: Number(n), nom: p.nom || ('#' + n), generation: p.generation, shiny: p.shiny || [] }))
+        .sort((a, b) => a.n - b.n);
+      TOTAL = pokemons.length ? pokemons[pokemons.length - 1].n : 0;
+      generations = [...new Set(pokemons.map((p) => p.generation).filter(Boolean))].sort((a, b) => a - b);
+      const racine = document.documentElement.style;
+      racine.setProperty('--cols', COLONNES_PLANCHE);
+      racine.setProperty('--rows', Math.ceil(TOTAL / COLONNES_PLANCHE));
+      // Le « ?v= » force le navigateur à recharger les planches quand le nombre de Pokémon change.
+      racine.setProperty('--planche-shiny', `url("sprites/shiny.webp?v=${TOTAL}")`);
+      racine.setProperty('--planche-classique', `url("sprites/classique.webp?v=${TOTAL}")`);
+      $('#total-max').textContent = TOTAL;
+      construireFiltres();
+    });
+
+  // ---------- Vues ----------
+  function vue(nom) {
+    $('#vue-auth').hidden = nom !== 'auth';
+    $('#vue-recup').hidden = nom !== 'recup';
+    $('#vue-app').hidden = nom !== 'app';
+  }
+  function toast(texte) {
+    const t = $('#toast');
+    t.textContent = texte; t.hidden = false;
+    clearTimeout(toast.t);
+    toast.t = setTimeout(() => { t.hidden = true; }, 3500);
+  }
+  function message(id, texte, type) {
+    const m = $(id);
+    m.textContent = texte || '';
+    m.className = 'msg' + (type ? ' ' + type : '');
+  }
+  function erreurAuth(e) {
+    const t = (e && e.message) || '';
+    if (/invalid login credentials/i.test(t)) return 'E-mail ou mot de passe incorrect.';
+    if (/already registered/i.test(t)) return 'Un compte existe déjà avec cet e-mail.';
+    if (/email not confirmed/i.test(t)) return 'Confirme ton e-mail avant de te connecter (vérifie ta boîte de réception).';
+    if (/password should be at least/i.test(t)) return 'Le mot de passe est trop court (6 caractères minimum).';
+    if (/valid email|invalid format/i.test(t)) return 'Cette adresse e-mail n\'est pas valide.';
+    if (/rate limit|too many/i.test(t)) return 'Trop de tentatives. Réessaie dans quelques minutes.';
+    return 'Une erreur est survenue. Réessaie.';
+  }
+
+  // ---------- Authentification ----------
+  function majModeAuth() {
+    $('#btn-auth').textContent = modeInscription ? 'Créer mon compte' : 'Se connecter';
+    $('#bascule').textContent = modeInscription ? 'Déjà un compte ? Se connecter' : 'Pas encore de compte ? Créer un compte';
+    $('#oubli').hidden = modeInscription;
+    $('#mdp').autocomplete = modeInscription ? 'new-password' : 'current-password';
+    message('#msg-auth', '');
+  }
+  $('#bascule').addEventListener('click', () => { modeInscription = !modeInscription; majModeAuth(); });
+
+  $('#form-auth').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!configOk) return message('#msg-auth', 'Renseigne SUPABASE_URL et SUPABASE_ANON_KEY dans index.html.', 'err');
+    const email = $('#email').value.trim();
+    const mdp = $('#mdp').value;
+    if (!email || mdp.length < 6) return message('#msg-auth', 'Saisis un e-mail et un mot de passe de 6 caractères minimum.', 'err');
+    const btn = $('#btn-auth');
+    btn.disabled = true; message('#msg-auth', '');
+    try {
+      if (modeInscription) {
+        const { data, error } = await sb.auth.signUp({ email, password: mdp, options: { emailRedirectTo: location.origin + location.pathname } });
+        if (error) throw error;
+        if (data.user && data.user.identities && data.user.identities.length === 0) {
+          message('#msg-auth', 'Un compte existe déjà avec cet e-mail.', 'err');
+        } else if (!data.session) {
+          message('#msg-auth', 'Compte créé. Ouvre l\'e-mail de confirmation pour l\'activer, puis connecte-toi.', 'ok');
+        }
+      } else {
+        const { error } = await sb.auth.signInWithPassword({ email, password: mdp });
+        if (error) throw error;
+      }
+    } catch (err) {
+      message('#msg-auth', erreurAuth(err), 'err');
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  $('#oubli').addEventListener('click', async () => {
+    if (!configOk) return;
+    const email = $('#email').value.trim();
+    if (!email) return message('#msg-auth', 'Saisis ton e-mail ci-dessus, puis clique sur « Mot de passe oublié ».', 'err');
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
+    if (error) return message('#msg-auth', erreurAuth(error), 'err');
+    message('#msg-auth', 'Si un compte existe avec cet e-mail, un lien de réinitialisation vient d\'être envoyé.', 'ok');
+  });
+
+  $('#form-recup').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const mdp = $('#mdp-new').value;
+    if (mdp.length < 6) return message('#msg-recup', 'Le mot de passe doit faire 6 caractères minimum.', 'err');
+    const { error } = await sb.auth.updateUser({ password: mdp });
+    if (error) return message('#msg-recup', erreurAuth(error), 'err');
+    recuperation = false;
+    const { data } = await sb.auth.getSession();
+    toast('Mot de passe modifié.');
+    gererSession(data.session);
+  });
+
+
+  async function gererSession(session) {
+    if (recuperation) return;
+    if (!session) { obtenus = new Array(TOTAL).fill(0); utilisateur = null; profil = { pseudo: '', avatar_path: null }; vue('auth'); return; }
+    utilisateur = session.user;
+    try {
+      await pret;
+      const { data, error } = await sb.from('collection').select('obtenus').maybeSingle();
+      if (error) throw error;
+      obtenus = new Array(TOTAL).fill(0);
+      if (data && Array.isArray(data.obtenus)) data.obtenus.forEach((v, i) => { if (i < TOTAL) obtenus[i] = v ? 1 : 0; });
+      const rp = await sb.from('profiles').select('pseudo, avatar_path').maybeSingle();
+      profil = rp.data ? { pseudo: rp.data.pseudo || '', avatar_path: rp.data.avatar_path || null } : { pseudo: '', avatar_path: null };
+      majProfilUI();
+      vue('app');
+      afficher();
+      page(location.hash === '#stats' ? 'stats' : location.hash === '#classement' ? 'classement' : 'collection');
+    } catch (err) {
+      vue('app');
+      toast('Chargement impossible. Recharge la page.');
+    }
+  }
+
+  // ---------- Filtres ----------
+  function construireFiltres() {
+    $('#f-gen').innerHTML = '<option value="">Tout</option>' +
+      generations.map((g) => `<option value="${g}">Gen ${g}</option>`).join('');
+    $('#c-gen').innerHTML = $('#j-gen').innerHTML = $('#f-gen').innerHTML;
+    $('#f-jeu').innerHTML = '<option value="">Tous les jeux</option>' +
+      jeux.map((j) => `<option value="${esc(j.id)}">${esc(j.nom)}</option>`).join('') +
+      '<option value="__aucun">Aucun jeu renseigné</option>';
+  }
+  $('#f-q').addEventListener('input', (e) => { f.q = e.target.value; afficher(); });
+  $('#f-gen').addEventListener('change', (e) => { f.gen = e.target.value; afficher(); });
+  $('#f-jeu').addEventListener('change', (e) => { f.jeu = e.target.value; afficher(); });
+  $('#f-etat').addEventListener('change', (e) => { f.etat = e.target.value; afficher(); });
+  $('#f-mode').value = mode;
+  $('#f-mode').addEventListener('change', (e) => {
+    mode = e.target.value;
+    try { localStorage.setItem('modeAffichage', mode); } catch (err) { /* stockage indisponible */ }
+    afficher();
+  });
+
+  function visibles(tab = obtenus, filtres = f) {
+    const q = norm(filtres.q);
+    const numero = /^#?\d+$/.test(q) ? parseInt(q.replace('#', ''), 10) : null;
+    return pokemons.filter((p) => {
+      if (filtres.gen && p.generation !== Number(filtres.gen)) return false;
+      if (filtres.jeu === '__aucun') { if (p.shiny.length) return false; }
+      else if (filtres.jeu && !p.shiny.some((e) => e.jeu === filtres.jeu)) return false;
+      if (filtres.etat === 'obtenus' && !tab[p.n - 1]) return false;
+      if (filtres.etat === 'manquants' && tab[p.n - 1]) return false;
+      if (q && !(norm(p.nom).includes(q) || (numero !== null && p.n === numero))) return false;
+      return true;
+    });
+  }
+
+  // ---------- Affichage ----------
+  function carte(p, tab = obtenus, lecture = false) {
+    const on = tab[p.n - 1] === 1;
+    return `<li class="card${on ? ' on' : ''}" data-n="${p.n}">
+      <button class="open" type="button" data-open="${p.n}" aria-label="${esc(p.nom)}, numéro ${p.n}, voir la fiche">
+        ${spriteHTML(p.n, varianteCarte(on))}
+        <span class="num">#${pad(p.n)}</span>
+        <span class="nom">${esc(p.nom)}</span>
+      </button>
+      ${lecture ? '' : `<button class="check" type="button" data-toggle="${p.n}" aria-pressed="${on}" aria-label="Obtenu : ${esc(p.nom)}">${STAR}</button>`}
+    </li>`;
+  }
+
+  function afficher() {
+    $('#grille').classList.toggle('grille-m2', mode === '2');
+    const liste = visibles();
+    $('#grille').innerHTML = liste.length
+      ? liste.map((p) => carte(p)).join('')
+      : '<li class="empty">Aucun Pokémon ne correspond à ces filtres.</li>';
+    const nbObtenus = liste.filter((p) => obtenus[p.n - 1]).length;
+    $('#resume').textContent = `${liste.length} affiché${liste.length > 1 ? 's' : ''}, dont ${nbObtenus} obtenu${nbObtenus > 1 ? 's' : ''}`;
+    majCompteur();
+  }
+
+  function majCompteur() {
+    const total = obtenus.reduce((a, b) => a + b, 0);
+    $('#total-obtenus').textContent = total;
+    $('#progres').style.width = (total / TOTAL * 100) + '%';
+  }
+
+  function majCarte(n) {
+    if (f.etat) return afficher(); // le filtre d'état dépend de la case
+    const li = $(`#grille .card[data-n="${n}"]`);
+    if (li) {
+      const on = obtenus[n - 1] === 1;
+      li.classList.toggle('on', on);
+      li.querySelector('.check').setAttribute('aria-pressed', String(on));
+      const sp = li.querySelector('.sprite');
+      if (sp) {
+        const v = varianteCarte(on);
+        sp.classList.toggle('shiny', v === 'shiny');
+        sp.classList.toggle('classique', v === 'classique');
+      }
+    }
+    majCompteur();
+    const liste = f.jeu || f.gen || f.q ? visibles() : pokemons;
+    const nb = liste.filter((p) => obtenus[p.n - 1]).length;
+    $('#resume').textContent = `${liste.length} affiché${liste.length > 1 ? 's' : ''}, dont ${nb} obtenu${nb > 1 ? 's' : ''}`;
+  }
+
+  // ---------- Enregistrement ----------
+  async function definir(n, valeur) {
+    const avant = obtenus[n - 1];
+    if (avant === valeur) return;
+    obtenus[n - 1] = valeur;
+    majCarte(n);
+    if (courant === n) ouvrirFiche(n);
+    const { error } = await sb.rpc('set_obtenu', { p_numero: n, p_valeur: valeur });
+    if (error) {
+      obtenus[n - 1] = avant;
+      majCarte(n);
+      if (courant === n) ouvrirFiche(n);
+      toast('Enregistrement impossible. Réessaie.');
+    }
+  }
+
+  // ---------- Fiche ----------
+  function ouvrirFiche(n, tab = obtenus, lecture = false) {
+    const p = pokemons.find((x) => x.n === n);
+    if (!p) return;
+    courant = lecture ? null : n;
+    const on = tab[n - 1] === 1;
+    const lignes = p.shiny.map((e) => {
+      const j = jeuParId[e.jeu];
+      return `<li>${esc(j ? j.nom : e.jeu)}${e.methode ? `<small>${esc(e.methode)}</small>` : ''}</li>`;
+    }).join('');
+    const dlg = $('#fiche');
+    dlg.innerHTML = `<div class="fiche">
+      <div class="fiche-head">
+        ${spriteHTML(p.n, 'shiny', 'Sprite shiny de ' + p.nom)}
+        <div>
+          <h2 id="fiche-titre">${esc(p.nom)}</h2>
+          <p>#${pad(p.n)}${p.generation ? ' · Génération ' + p.generation : ''}</p>
+          ${lecture ? `<p>${on ? 'Obtenu' : 'Pas encore obtenu'}</p>` : ''}
+        </div>
+      </div>
+      <h3>Disponible en shiny dans</h3>
+      ${lignes ? `<ul class="jeux">${lignes}</ul>` : '<p>Aucun jeu renseigné pour l\'instant.</p>'}
+      <div class="fiche-actions">
+        ${lecture ? '' : `<button class="btn ${on ? 'ghost' : 'gold'}" type="button" data-fiche-toggle="${p.n}">${on ? 'Retirer des obtenus' : 'Marquer comme obtenu'}</button>`}
+        <button class="btn ghost" type="button" data-fermer>Fermer</button>
+      </div>
+    </div>`;
+    if (!dlg.open) dlg.showModal();
+  }
+
+  $('#grille').addEventListener('click', (e) => {
+    const t = e.target.closest('[data-toggle]');
+    if (t) { const n = Number(t.dataset.toggle); return definir(n, obtenus[n - 1] ? 0 : 1); }
+    const o = e.target.closest('[data-open]');
+    if (o) ouvrirFiche(Number(o.dataset.open));
+  });
+  $('#fiche').addEventListener('click', (e) => {
+    if (e.target.closest('[data-fermer]') || e.target === $('#fiche')) return $('#fiche').close();
+    const t = e.target.closest('[data-fiche-toggle]');
+    if (t) { const n = Number(t.dataset.ficheToggle); definir(n, obtenus[n - 1] ? 0 : 1); }
+  });
+  $('#fiche').addEventListener('close', () => { courant = null; });
+
+  // ---------- Apparence (auto = comme le téléphone, clair, sombre) ----------
+  const requeteSombre = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+  function lireApparence() {
+    try { const a = localStorage.getItem('apparence'); return ['auto', 'clair', 'sombre'].includes(a) ? a : 'auto'; }
+    catch (e) { return 'auto'; }
+  }
+  let apparence = lireApparence();
+  function appliquerApparence() {
+    const sombre = apparence === 'sombre' || (apparence === 'auto' && !!requeteSombre && requeteSombre.matches);
+    document.documentElement.setAttribute('data-theme', sombre ? 'sombre' : 'clair');
+    const meta = document.querySelector('meta[name="theme-color"]'); // couleur de la barre du navigateur sur téléphone
+    if (meta) meta.setAttribute('content', getComputedStyle(document.documentElement).getPropertyValue('--bg').trim());
+  }
+  if (requeteSombre) {
+    if (requeteSombre.addEventListener) requeteSombre.addEventListener('change', appliquerApparence);
+    else if (requeteSombre.addListener) requeteSombre.addListener(appliquerApparence);
+  }
+
+  // ---------- Profil ----------
+  const urlAvatar = (chemin) => (chemin ? sb.storage.from('avatars').getPublicUrl(chemin).data.publicUrl : '');
+
+  function avatarHTML(taille, src, nom) {
+    const style = `--t:${taille}px`;
+    if (src) return `<img class="avatar" style="${style}" src="${esc(src)}" alt="" width="${taille}" height="${taille}">`;
+    const lettre = (Array.from(String(nom || '').trim())[0] || '?').toUpperCase();
+    return `<span class="avatar" style="${style}" aria-hidden="true">${esc(lettre)}</span>`;
+  }
+
+  function majProfilUI() {
+    const nom = profil.pseudo || (utilisateur && utilisateur.email) || '';
+    const src = urlAvatar(profil.avatar_path);
+    $('#btn-profil').innerHTML = avatarHTML(38, src, nom) + (profil.pseudo ? `<span class="profil-nom">${esc(profil.pseudo)}</span>` : '');
+    $('#stats-avatar').innerHTML = avatarHTML(56, src, nom);
+    $('#stats-pseudo').textContent = profil.pseudo;
+    $('#stats-pseudo').hidden = !profil.pseudo;
+  }
+
+  const pseudoSaisi = () => { const i = $('#pseudo'); return i ? i.value : profil.pseudo; };
+
+  function srcApercu() {
+    if (photoEnAttente && photoEnAttente.url) return photoEnAttente.url;
+    if (photoEnAttente && photoEnAttente.retirer) return '';
+    return urlAvatar(profil.avatar_path);
+  }
+
+  function rendreProfil(pseudo, msg, type) {
+    const src = srcApercu();
+    $('#profil').innerHTML = `<form class="fiche" id="form-profil" novalidate>
+      <h2 class="profil-titre" id="profil-titre">Mon profil</h2>
+      <div class="profil-photo">
+        ${avatarHTML(96, src, pseudo || (utilisateur && utilisateur.email))}
+        <div class="profil-photo-actions">
+          <button class="btn ghost" type="button" data-choisir>Choisir une photo</button>
+          ${src ? '<button class="btn ghost" type="button" data-retirer>Retirer la photo</button>' : ''}
+          <input type="file" id="fichier-photo" accept="image/*" hidden>
+        </div>
+      </div>
+      <label class="field"><span>Pseudo</span>
+        <input id="pseudo" type="text" minlength="3" maxlength="20" autocomplete="nickname" value="${esc(pseudo)}">
+      </label>
+      <p class="profil-email">${esc((utilisateur && utilisateur.email) || '')}</p>
+      <fieldset class="apparence">
+        <legend>Apparence</legend>
+        <div class="choix">
+          ${[['auto', 'Auto'], ['clair', 'Clair'], ['sombre', 'Sombre']].map(([v, t]) =>
+            `<label class="${apparence === v ? 'sel' : ''}"><input type="radio" name="apparence" value="${v}"${apparence === v ? ' checked' : ''}>${t}</label>`).join('')}
+        </div>
+      </fieldset>
+      <p class="msg${type ? ' ' + type : ''}" id="msg-profil" role="status" aria-live="polite">${esc(msg || '')}</p>
+      <div class="fiche-actions">
+        <button class="btn gold" type="submit" id="btn-profil-ok">Enregistrer</button>
+        <button class="btn ghost" type="button" data-fermer>Fermer</button>
+      </div>
+      <button class="link" type="button" data-deco>Se déconnecter</button>
+    </form>`;
+  }
+
+  function ouvrirProfil() {
+    abandonnerPhoto();
+    rendreProfil(profil.pseudo);
+    const d = $('#profil');
+    if (!d.open) d.showModal();
+  }
+
+  function abandonnerPhoto() {
+    if (photoEnAttente && photoEnAttente.url) URL.revokeObjectURL(photoEnAttente.url);
+    photoEnAttente = null;
+  }
+
+  // Recadre la photo en carré de 256 px et la compresse en JPEG.
+  async function reduirePhoto(fichier) {
+    const url = URL.createObjectURL(fichier);
+    try {
+      const img = await new Promise((ok, ko) => { const i = new Image(); i.onload = () => ok(i); i.onerror = ko; i.src = url; });
+      const c = Math.min(img.naturalWidth, img.naturalHeight);
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = 256;
+      canvas.getContext('2d').drawImage(img, (img.naturalWidth - c) / 2, (img.naturalHeight - c) / 2, c, c, 0, 0, 256, 256);
+      const blob = await new Promise((ok) => canvas.toBlob(ok, 'image/jpeg', 0.85));
+      if (!blob) throw new Error('compression impossible');
+      return blob;
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  }
+
+  async function enregistrerProfil() {
+    const pseudo = pseudoSaisi().trim();
+    if (pseudo && (pseudo.length < 3 || pseudo.length > 20)) {
+      return rendreProfil(pseudo, 'Le pseudo doit faire entre 3 et 20 caractères.', 'err');
+    }
+    $('#btn-profil-ok').disabled = true;
+    const ancien = profil.avatar_path;
+    let chemin = ancien, aSupprimer = null, televerse = null;
+    try {
+      if (photoEnAttente && photoEnAttente.blob) {
+        televerse = `${utilisateur.id}/${Date.now()}.jpg`;
+        const { error } = await sb.storage.from('avatars').upload(televerse, photoEnAttente.blob, { contentType: 'image/jpeg', cacheControl: '31536000' });
+        if (error) { televerse = null; throw error; }
+        chemin = televerse; aSupprimer = ancien;
+      } else if (photoEnAttente && photoEnAttente.retirer) {
+        chemin = null; aSupprimer = ancien;
+      }
+      const { error } = await sb.from('profiles').upsert({ user_id: utilisateur.id, pseudo: pseudo || null, avatar_path: chemin }, { onConflict: 'user_id' });
+      if (error) {
+        if (televerse) await sb.storage.from('avatars').remove([televerse]);
+        throw error;
+      }
+      if (aSupprimer) sb.storage.from('avatars').remove([aSupprimer]); // nettoyage, sans attendre
+      profil = { pseudo, avatar_path: chemin };
+      abandonnerPhoto();
+      majProfilUI();
+      if (!$('#page-classement').hidden) chargerClassement();
+      rendreProfil(pseudo, 'Profil enregistré.', 'ok');
+    } catch (err) {
+      const pris = err && (err.code === '23505' || /duplicate|unique/i.test(err.message || ''));
+      rendreProfil(pseudo, pris ? 'Ce pseudo est déjà pris.' : 'Enregistrement impossible. Réessaie.', 'err');
+    }
+  }
+
+  $('#btn-profil').addEventListener('click', ouvrirProfil);
+  $('#profil').addEventListener('click', (e) => {
+    const d = $('#profil');
+    if (e.target === d || e.target.closest('[data-fermer]')) return d.close();
+    if (e.target.closest('[data-choisir]')) return $('#fichier-photo').click();
+    if (e.target.closest('[data-retirer]')) {
+      abandonnerPhoto();
+      photoEnAttente = { retirer: true };
+      return rendreProfil(pseudoSaisi());
+    }
+    if (e.target.closest('[data-deco]')) { d.close(); sb.auth.signOut(); }
+  });
+  $('#profil').addEventListener('change', async (e) => {
+    if (e.target.id !== 'fichier-photo') return;
+    const fichier = e.target.files && e.target.files[0];
+    if (!fichier) return;
+    if (!fichier.type.startsWith('image/')) return rendreProfil(pseudoSaisi(), 'Ce fichier n\'est pas une image.', 'err');
+    try {
+      const blob = await reduirePhoto(fichier);
+      abandonnerPhoto();
+      photoEnAttente = { blob, url: URL.createObjectURL(blob) };
+      rendreProfil(pseudoSaisi());
+    } catch (err) {
+      rendreProfil(pseudoSaisi(), 'Impossible de lire cette image. Essaie un autre fichier.', 'err');
+    }
+  });
+  $('#profil').addEventListener('change', (e) => {
+    if (e.target.name !== 'apparence') return;
+    apparence = e.target.value;
+    try { localStorage.setItem('apparence', apparence); } catch (err) { /* stockage indisponible */ }
+    appliquerApparence();
+    document.querySelectorAll('.apparence label').forEach((l) => l.classList.toggle('sel', l.querySelector('input').checked));
+  });
+  $('#profil').addEventListener('submit', (e) => { e.preventDefault(); enregistrerProfil(); });
+  $('#profil').addEventListener('close', abandonnerPhoto);
+
+  // ---------- Pages et statistiques ----------
+  const fmtPct = (x) => new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(x * 100) + '\u00A0%';
+
+  // Jauge monochrome : rouge (0 %), orange (50 %), vert (100 %).
+  function couleurJauge(part) {
+    const teinte = part < 0.5 ? 5 + 25 * (part / 0.5) : 30 + 95 * ((part - 0.5) / 0.5);
+    return `hsl(${teinte.toFixed(0)} 78% 44%)`;
+  }
+
+  function carteStat(nb, total, nom, grande) {
+    const part = total ? nb / total : 0;
+    const complet = total > 0 && nb === total;
+    return `<article class="stat-carte${grande ? ' total' : ''}">
+      ${complet ? `<span class="etoile" role="img" aria-label="Complété">${STAR}</span>` : ''}
+      <div class="jauge${grande ? ' grande' : ''}" role="meter" aria-label="${esc(nom)}" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${nb}">
+        <i data-h="${(part * 100).toFixed(2)}" style="background:${couleurJauge(part)}"></i>
+      </div>
+      <div>
+        <p class="stat-nom">${esc(nom)}</p>
+        <p class="stat-gros"><strong>${nb}</strong> / ${total}</p>
+        <p class="stat-pct">${fmtPct(part)}</p>
+      </div>
+    </article>`;
+  }
+
+  function renderStats(tab, idTotal, idGens) {
+    const totalObtenus = tab.reduce((a, b) => a + b, 0);
+    $(idTotal).innerHTML = carteStat(totalObtenus, TOTAL, 'Shiny obtenus', true);
+    const gens = generations;
+    $(idGens).innerHTML = gens.map((g) => {
+      const liste = pokemons.filter((p) => p.generation === g);
+      const nb = liste.filter((p) => tab[p.n - 1]).length;
+      return carteStat(nb, liste.length, 'Génération ' + g, false);
+    }).join('');
+    // Les jauges se remplissent après le premier affichage, pour animer la montée.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      document.querySelectorAll(`${idTotal} .jauge i, ${idGens} .jauge i`).forEach((i) => { i.style.height = i.dataset.h + '%'; });
+    }));
+  }
+
+  const PAGES = ['collection', 'stats', 'classement', 'joueur'];
+  function page(nom) {
+    PAGES.forEach((x) => { $('#page-' + x).hidden = x !== nom; });
+    const onglet = nom === 'joueur' ? 'classement' : nom;
+    document.querySelectorAll('.onglet').forEach((b) => b.setAttribute('aria-current', b.dataset.page === onglet ? 'page' : 'false'));
+    if (nom === 'stats') renderStats(obtenus, '#stat-total', '#stat-gens');
+    if (nom === 'classement') chargerClassement();
+    window.scrollTo(0, 0);
+    const garde = nom === 'stats' || nom === 'classement';
+    try { history.replaceState(null, '', garde ? '#' + nom : location.pathname + location.search); } catch (e) { /* ignoré */ }
+  }
+  document.querySelectorAll('.onglet').forEach((b) => b.addEventListener('click', () => page(b.dataset.page)));
+
+  // ---------- Classement et profils des autres joueurs ----------
+  const cl = { q: '', gen: '' };
+  const fj = { q: '', gen: '', jeu: '', etat: '' };
+  let classementBrut = [];
+  let classementTotal = 0; // « sur combien » : nombre de Pokémon comptés (génération choisie ou tous)
+  let jetonClassement = 0;
+  let joueur = null; // { id, pseudo, avatar_path, obtenus }
+  const pluriel = (n, mot) => `${n} ${mot}${n > 1 ? 's' : ''}`;
+
+  const numerosDeGen = (g) => pokemons.filter((p) => p.generation === Number(g)).map((p) => p.n);
+
+  async function chargerClassement() {
+    const jeton = ++jetonClassement;
+    $('#c-resume').textContent = '';
+    $('#c-liste').innerHTML = '<li class="vide">Chargement du classement…</li>';
+    const numeros = cl.gen ? numerosDeGen(cl.gen) : null; // null = tous les Pokémon
+    const { data, error } = await sb.rpc('classement', { p_numeros: numeros });
+    if (jeton !== jetonClassement) return; // une réponse plus récente est arrivée entre-temps
+    if (error) {
+      classementBrut = [];
+      $('#c-liste').innerHTML = '<li class="vide">Impossible de charger le classement. Réessaie dans un instant.</li>';
+      return;
+    }
+    classementBrut = data || [];
+    classementTotal = numeros ? numeros.length : TOTAL;
+    rendreClassement();
+  }
+
+  function ligneClassement(r) {
+    const moi = utilisateur && r.user_id === utilisateur.id;
+    const etiquette = `${r.pseudo}, ${r.rang}${r.rang === 1 ? 'er' : 'e'}, ${r.nb} sur ${classementTotal}. Voir le profil`;
+    return `<li><button class="rang-ligne${moi ? ' moi' : ''}" type="button" data-user="${esc(r.user_id)}" aria-label="${esc(etiquette)}">
+      <span class="rang${r.rang <= 3 ? ' r' + r.rang : ''}" aria-hidden="true">${r.rang}</span>
+      ${avatarHTML(44, urlAvatar(r.avatar_path), r.pseudo)}
+      <span class="rang-nom">${esc(r.pseudo)}${moi ? '<span class="moi-badge">toi</span>' : ''}</span>
+      <span class="rang-score"><strong>${r.nb}</strong> / ${classementTotal}</span>
+    </button></li>`;
+  }
+
+  function rendreClassement() {
+    $('#c-info').hidden = !!profil.pseudo;
+    // Rang : à égalité de shiny, même rang (le serveur trie déjà par nombre décroissant).
+    let rang = 0;
+    const lignes = classementBrut.map((r, i) => {
+      if (i === 0 || r.nb !== classementBrut[i - 1].nb) rang = i + 1;
+      return { ...r, rang };
+    });
+    const q = norm(cl.q);
+    const liste = q ? lignes.filter((r) => norm(r.pseudo).includes(q)) : lignes;
+    $('#c-resume').textContent = classementBrut.length ? `${classementBrut.length} joueur${classementBrut.length > 1 ? 's' : ''} classé${classementBrut.length > 1 ? 's' : ''}` : '';
+    $('#c-liste').innerHTML = liste.length
+      ? liste.map(ligneClassement).join('')
+      : `<li class="vide">${classementBrut.length ? 'Aucun joueur ne correspond à cette recherche.' : 'Personne n\'est encore classé.'}</li>`;
+  }
+
+  async function ouvrirJoueur(id) {
+    joueur = null;
+    page('joueur');
+    $('#j-entete').innerHTML = '<p class="vide">Chargement du profil…</p>';
+    ['#j-stat-total', '#j-stat-gens', '#j-grille'].forEach((sel) => { $(sel).innerHTML = ''; });
+    $('#j-resume').textContent = '';
+    const { data, error } = await sb.rpc('profil_public', { p_user: id });
+    if (error || !data || !data.length) {
+      $('#j-entete').innerHTML = '<p class="vide">Ce profil est introuvable.</p>';
+      return;
+    }
+    const r = data[0];
+    const tab = new Array(TOTAL).fill(0);
+    (r.obtenus || []).forEach((v, i) => { if (i < TOTAL) tab[i] = v ? 1 : 0; });
+    joueur = { id, pseudo: r.pseudo, avatar_path: r.avatar_path, obtenus: tab };
+    Object.assign(fj, { q: '', gen: '', jeu: '', etat: '' });
+    $('#j-q').value = ''; $('#j-gen').value = ''; $('#j-etat').value = '';
+    const total = tab.reduce((a, b) => a + b, 0);
+    $('#j-entete').innerHTML = `${avatarHTML(72, urlAvatar(r.avatar_path), r.pseudo)}
+      <div><h2 class="page-titre">${esc(r.pseudo)}</h2><p class="stats-pseudo">${pluriel(total, 'shiny obtenu')} sur ${TOTAL}</p></div>`;
+    renderStats(tab, '#j-stat-total', '#j-stat-gens');
+    afficherJoueur();
+  }
+
+  function afficherJoueur() {
+    if (!joueur) return;
+    const liste = visibles(joueur.obtenus, fj);
+    $('#j-grille').classList.toggle('grille-m2', mode === '2');
+    $('#j-grille').innerHTML = liste.length
+      ? liste.map((p) => carte(p, joueur.obtenus, true)).join('')
+      : '<li class="empty">Aucun Pokémon ne correspond à ces filtres.</li>';
+    const nb = liste.filter((p) => joueur.obtenus[p.n - 1]).length;
+    $('#j-resume').textContent = `${pluriel(liste.length, 'affiché')}, dont ${pluriel(nb, 'obtenu')}`;
+  }
+
+  $('#c-q').addEventListener('input', (e) => { cl.q = e.target.value; rendreClassement(); });
+  $('#c-gen').addEventListener('change', (e) => { cl.gen = e.target.value; chargerClassement(); });
+  $('#c-liste').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-user]');
+    if (b) ouvrirJoueur(b.dataset.user);
+  });
+  $('#c-info').addEventListener('click', (e) => { if (e.target.closest('[data-profil]')) ouvrirProfil(); });
+  $('#j-retour').addEventListener('click', () => page('classement'));
+  $('#j-q').addEventListener('input', (e) => { fj.q = e.target.value; afficherJoueur(); });
+  $('#j-gen').addEventListener('change', (e) => { fj.gen = e.target.value; afficherJoueur(); });
+  $('#j-etat').addEventListener('change', (e) => { fj.etat = e.target.value; afficherJoueur(); });
+  $('#j-grille').addEventListener('click', (e) => {
+    const o = e.target.closest('[data-open]');
+    if (o && joueur) ouvrirFiche(Number(o.dataset.open), joueur.obtenus, true);
+  });
+
+  // ---------- Démarrage ----------
+  appliquerApparence();
+  majModeAuth();
+  pret.catch(() => toast('Impossible de charger shiny.json.'));
+  if (!configOk) {
+    vue('auth');
+    message('#msg-auth', 'Configuration manquante : renseigne SUPABASE_URL et SUPABASE_ANON_KEY dans index.html.', 'err');
+  } else {
+    sb.auth.onAuthStateChange((event, session) => {
+      // Ne pas appeler Supabase directement dans ce callback : on diffère.
+      if (event === 'PASSWORD_RECOVERY') { recuperation = true; setTimeout(() => vue('recup'), 0); return; }
+      setTimeout(() => gererSession(session), 0);
+    });
+  }
+})();
+</script>
+</body>
+</html>
