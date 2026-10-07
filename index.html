@@ -32,6 +32,7 @@
     --gold-soft: #FFF3CF;
     --teal: #1B6F7E;
     --danger: #B3261E;
+    --on-danger: #fff;           /* texte sur les boutons de suppression */
     --field: #fff;               /* fond des champs de saisie */
     --on-ink: #fff;              /* texte sur les boutons foncés */
     --voile: rgba(20, 32, 51, .45);
@@ -88,6 +89,7 @@
     --gold-soft: #2D2813;
     --teal: #5FC9D8;
     --danger: #FF8A80;
+    --on-danger: #2B0A07;
     --field: #0E1520;
     --on-ink: #0E1520;
     --voile: rgba(0, 0, 0, .65);
@@ -112,6 +114,7 @@
   .btn.block { width: 100%; }
   .btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
   .btn.gold { background: var(--gold); border-color: var(--gold); color: #1d1500; }
+  .btn.danger { background: var(--danger); border-color: var(--danger); color: var(--on-danger); }
   .btn:disabled { opacity: .6; cursor: default; }
   .link {
     background: none; border: 0; padding: 4px 0;
@@ -157,6 +160,10 @@
   .profil-photo-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
   .profil-email { margin: 0 0 4px; color: var(--muted); font-size: .9rem; overflow-wrap: anywhere; }
   .fiche .link { margin-top: 14px; }
+  .profil-liens { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; margin-top: 10px; }
+  .fiche .profil-liens .link { margin-top: 0; }
+  .link.danger { color: var(--danger); }
+  .suppr-texte { margin: 12px 0 16px; }
   .apparence { border: 0; margin: 14px 0 6px; padding: 0; }
   .apparence legend { padding: 0; margin-bottom: 4px; font-weight: 600; font-size: .9rem; }
   .apparence .choix { display: flex; gap: 6px; }
@@ -527,6 +534,7 @@
   let obtenus = new Array(TOTAL).fill(0);
   let modeInscription = false;
   let recuperation = false;
+  let suppressionEnCours = false;
   let courant = null; // numéro du Pokémon affiché dans la fiche
   let utilisateur = null;
   let profil = { pseudo: '', avatar_path: null };
@@ -643,7 +651,7 @@
 
 
   async function gererSession(session) {
-    if (recuperation) return;
+    if (recuperation || suppressionEnCours) return;
     if (!session) { obtenus = new Array(TOTAL).fill(0); utilisateur = null; profil = { pseudo: '', avatar_path: null }; vue('auth'); return; }
     utilisateur = session.user;
     try {
@@ -880,8 +888,73 @@
         <button class="btn gold" type="submit" id="btn-profil-ok">Enregistrer</button>
         <button class="btn ghost" type="button" data-fermer>Fermer</button>
       </div>
-      <button class="link" type="button" data-deco>Se déconnecter</button>
+      <div class="profil-liens">
+        <button class="link" type="button" data-deco>Se déconnecter</button>
+        <button class="link danger" type="button" data-supprimer>Supprimer mon compte</button>
+      </div>
     </form>`;
+  }
+
+  // Écran de confirmation avant de supprimer le compte (le mot de passe est redemandé).
+  function rendreSuppression(msg) {
+    $('#profil').innerHTML = `<form class="fiche" id="form-suppression" novalidate>
+      <h2 class="profil-titre" id="profil-titre">Supprimer mon compte</h2>
+      <p class="suppr-texte">Cette action est <strong>définitive</strong>. Seront supprimés : ton compte, ton pseudo, ta photo,
+        toute ta collection et ta place dans le classement. Il sera impossible de les récupérer.</p>
+      <label class="field"><span>Mot de passe (pour confirmer)</span>
+        <input id="mdp-suppr" type="password" autocomplete="current-password" required>
+      </label>
+      <p class="msg err" id="msg-suppr" role="alert">${esc(msg || '')}</p>
+      <div class="fiche-actions">
+        <button class="btn danger" type="submit" id="btn-suppr-ok">Supprimer définitivement</button>
+        <button class="btn ghost" type="button" data-annuler-suppr>Annuler</button>
+      </div>
+    </form>`;
+  }
+
+  async function supprimerCompte() {
+    const mdp = $('#mdp-suppr').value;
+    if (!mdp) return rendreSuppression('Saisis ton mot de passe pour confirmer.');
+    $('#btn-suppr-ok').disabled = true;
+    suppressionEnCours = true; // empêche le site de recharger la session pendant l'opération
+    try {
+      // 1. Vérifier que c'est bien le propriétaire du compte.
+      const { error: erreurMdp } = await sb.auth.signInWithPassword({ email: utilisateur.email, password: mdp });
+      if (erreurMdp) {
+        const faux = /invalid login credentials/i.test(erreurMdp.message || '');
+        return rendreSuppression(faux ? 'Mot de passe incorrect.' : 'Vérification impossible. Réessaie.');
+      }
+      // 2. Supprimer toutes ses photos de profil.
+      const dossier = utilisateur.id;
+      const { data: fichiers } = await sb.storage.from('avatars').list(dossier);
+      if (fichiers && fichiers.length) {
+        await sb.storage.from('avatars').remove(fichiers.map((f) => `${dossier}/${f.name}`));
+      }
+      // 3. Supprimer le compte et toutes les données associées.
+      const { error } = await sb.rpc('supprimer_mon_compte');
+      if (error) {
+        // Les photos sont déjà supprimées : on retire la référence pour ne pas laisser une image cassée.
+        await sb.from('profiles').update({ avatar_path: null }).eq('user_id', dossier);
+        profil.avatar_path = null;
+        majProfilUI();
+        throw error;
+      }
+      // 4. Déconnexion locale (le compte n'existe plus côté serveur) et retour à l'accueil.
+      await sb.auth.signOut({ scope: 'local' });
+      $('#profil').close();
+      utilisateur = null;
+      profil = { pseudo: '', avatar_path: null };
+      obtenus = new Array(TOTAL).fill(0);
+      modeInscription = false;
+      majModeAuth();
+      $('#email').value = ''; $('#mdp').value = '';
+      vue('auth');
+      message('#msg-auth', 'Ton compte et toutes tes données ont été supprimés.', 'ok');
+    } catch (err) {
+      rendreSuppression('La suppression a échoué. Réessaie dans un instant.');
+    } finally {
+      suppressionEnCours = false;
+    }
   }
 
   function ouvrirProfil() {
@@ -957,6 +1030,8 @@
       photoEnAttente = { retirer: true };
       return rendreProfil(pseudoSaisi());
     }
+    if (e.target.closest('[data-supprimer]')) return rendreSuppression();
+    if (e.target.closest('[data-annuler-suppr]')) return rendreProfil(profil.pseudo);
     if (e.target.closest('[data-deco]')) { d.close(); sb.auth.signOut(); }
   });
   $('#profil').addEventListener('change', async (e) => {
@@ -980,7 +1055,11 @@
     appliquerApparence();
     document.querySelectorAll('.apparence label').forEach((l) => l.classList.toggle('sel', l.querySelector('input').checked));
   });
-  $('#profil').addEventListener('submit', (e) => { e.preventDefault(); enregistrerProfil(); });
+  $('#profil').addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (e.target.id === 'form-suppression') supprimerCompte();
+    else enregistrerProfil();
+  });
   $('#profil').addEventListener('close', abandonnerPhoto);
 
   // ---------- Pages et statistiques ----------
@@ -1151,6 +1230,7 @@
     message('#msg-auth', 'Configuration manquante : renseigne SUPABASE_URL et SUPABASE_ANON_KEY dans index.html.', 'err');
   } else {
     sb.auth.onAuthStateChange((event, session) => {
+      if (suppressionEnCours) return; // reconnexion / déconnexion provoquées par la suppression : gérées par supprimerCompte
       // Ne pas appeler Supabase directement dans ce callback : on diffère.
       if (event === 'PASSWORD_RECOVERY') { recuperation = true; setTimeout(() => vue('recup'), 0); return; }
       setTimeout(() => gererSession(session), 0);
